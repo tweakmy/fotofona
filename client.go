@@ -10,7 +10,7 @@ import (
 )
 
 // NewGrant - Prepare a new grant for the enviroment to use
-func NewGrant(ctx context.Context, endpoint string, timeinsec int64,
+func NewGrant(ctx context.Context, endpoint string, leaseTimeInSec int64,
 	kvKey string, kvVal string) (clientv3.KV, clientv3.LeaseID, clientv3.Lease, error) {
 
 	//Create New Client
@@ -28,7 +28,7 @@ func NewGrant(ctx context.Context, endpoint string, timeinsec int64,
 	lease := clientv3.NewLease(cl)
 
 	//Grant the lease with the time
-	leaseResp, err := lease.Grant(ctx, timeinsec)
+	leaseResp, err := lease.Grant(ctx, leaseTimeInSec)
 	if err != nil {
 		fmt.Println("Could not setup the lease " + err.Error())
 		return nil, 0, nil, err
@@ -45,13 +45,56 @@ func NewGrant(ctx context.Context, endpoint string, timeinsec int64,
 
 }
 
-// RenewLease - Keep on renewing the lease
-func RenewLease(ctx context.Context, lease clientv3.Lease, leaseID clientv3.LeaseID) (err error) {
+// RenewLeaseOnce - Renewing lease once
+func RenewLeaseOnce(ctx context.Context, lease clientv3.Lease, leaseID clientv3.LeaseID) (err error) {
 
 	_, err = lease.KeepAliveOnce(ctx, leaseID)
 	if err != nil {
-		fmt.Println("Could not renew lease " + err.Error())
+		fmt.Println("Could not renew lease once " + err.Error())
 	}
+
+	return
+}
+
+// RenewLease - Keep on renewing the lease
+func RenewLease(ctx context.Context, lease clientv3.Lease, leaseID clientv3.LeaseID,
+	timeinsec int64) (renewalInterupted chan struct{}, err error) {
+
+	kaCh, err := lease.KeepAlive(ctx, leaseID)
+
+	if err != nil {
+		fmt.Println("Could not renew lease " + err.Error())
+		return
+	}
+
+	renewalTicker := time.NewTicker(time.Duration(timeinsec) * time.Second)
+
+	renewalInterupted = make(chan struct{})
+
+	//Run a separate goroutine to check if the renewal is interupted, otherwise indicate to parent the renewal is interupted
+	go func() {
+
+	loop:
+		for kaCh != nil {
+
+			select {
+			case _, ok := <-kaCh:
+				if !ok {
+					break loop
+				}
+				// else {
+				// 	fmt.Println(karesp.TTL)
+				// }
+			case <-renewalTicker.C:
+				fmt.Println("Channel is not closed")
+			}
+
+		}
+
+		renewalTicker.Stop() //Stop timer
+		renewalInterupted <- struct{}{}
+		return
+	}()
 
 	return
 }
