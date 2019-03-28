@@ -1,4 +1,7 @@
 vendor
 Gopkg.lock
-test-etcd/.
-test-etcd/default.etcd/
+# ignore files in folder foo
+test-etcd/*
+
+# but keep the folder
+!test-etcd/.keep
