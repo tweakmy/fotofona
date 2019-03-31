@@ -32,6 +32,7 @@ loop:
 
 		//Initally connect to etcd server and get the interupt channel
 		errLease = lease.StartLease(ctx, key1, val1)
+
 		if errLease == nil {
 			select {
 			case <-lease.GetRenewalInteruptChan():
@@ -44,6 +45,9 @@ loop:
 				if err != nil {
 					//What is handling here... I am not sure yet
 				}
+
+				fmt.Println("Controller revoking the lease")
+
 			case <-ctx.Done(): //Parent ask to quit
 				break loop
 
