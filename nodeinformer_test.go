@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -16,10 +17,10 @@ import (
 // 	// The node address.
 // 	Address
 
-func TestInformer(t *testing.T) {
-
-	var nodes = v1.Node{
+func NewMasterNode(nodeName string, ipaddress string) v1.Node {
+	return v1.Node{
 		ObjectMeta: metaV1.ObjectMeta{
+			Name: nodeName,
 			Labels: map[string]string{
 				"node-role.kubernetes.io/master": "",
 			},
@@ -28,11 +29,16 @@ func TestInformer(t *testing.T) {
 			Addresses: []v1.NodeAddress{
 				v1.NodeAddress{
 					Type:    v1.NodeAddressType("InternalIP"),
-					Address: "10.0.0.1",
+					Address: ipaddress,
 				},
 			},
 		},
 	}
+}
+
+func TestInformer(t *testing.T) {
+
+	var nodes = NewMasterNode("node1", "10.0.0.1")
 
 	ctx, cancel := context.WithCancel(context.TODO())
 
@@ -41,9 +47,19 @@ func TestInformer(t *testing.T) {
 	// Create the fake client.
 	client := fake.NewSimpleClientset(&nodes)
 
-	inf.StartInformer(ctx, client, false)
+	go inf.StartInformer(ctx, client, false)
 
 	time.Sleep(3 * time.Second)
+
+	var node2 = NewMasterNode("node2", "10.0.0.2")
+
+	client.CoreV1().Nodes().Create(&node2)
+
+	//fmt.Println(err)
+	time.Sleep(3 * time.Second)
+	ips, _ := inf.GetHostIPs()
+
+	fmt.Println(ips)
 
 	cancel()
 }
