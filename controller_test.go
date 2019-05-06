@@ -2,134 +2,219 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 )
 
-var infTest = InfTest{
-	fakehostip: []string{"1.1.1.1"},
-	fakeChan:   make(chan struct{}),
-	getDNSTestFunc: func() bool {
-		return true //Defaults to return ok everytime
-	},
+type testCondCtrl struct {
+	verifyGate bool
+	rootKey    string
+	DNSname    string
+	DNSTTL     int
+	informer   *infTest
+	leaser     *leaseTest
 }
 
-var leaseTest = LeaseTest{
-	fakeChan: make(chan struct{}),
-	startLeaseFunc: func(entries []Entry) bool {
-		return true //Defaults to return ok everytime
-	},
-	leaseRevokeRunFunc: func() bool {
-		return true //Defaults to return ok everytime
-	},
+func runControllerFunc(tc testCondCtrl) context.CancelFunc {
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go RunController(ctx, tc.rootKey, tc.DNSname, tc.DNSTTL, tc.leaser, tc.informer)
+
+	return cancel
 }
 
-//Test 1: Verify we can received the same key as expected
-func TestController1(t *testing.T) {
+// Verify the Entries are correctly converted and the Leaser will get the correct value
+func TestControllerVerifyEntriesOk(t *testing.T) {
 
-	dnsName := "kubemaster.local"
+	ctx, cancel := context.WithCancel(context.Background())
 
-	//This is the only way to verify whether we are getting the right key and value
-	leaseTest.startLeaseFunc = func(entries []Entry) bool {
+	tc := testCondCtrl{
+		rootKey: "rootkey",
+		DNSname: "kubemaster.local",
+		DNSTTL:  60,
+		informer: &infTest{
+			fakehostip: []string{"1.1.1.1"}, //Assumed there is only 1 Node ip available
+			fakeChan:   make(chan struct{}),
+			getDNSTestFunc: func() bool {
+				return true //Defaults to return ok everytime
+			},
+		},
+		leaser: &leaseTest{
+			fakeChan: make(chan struct{}),
+			startLeaseFunc: func(entries []Entry, leaseTimeInSec int) bool {
+				expectedKey := "/rootkey/local/kubemaster/x1"
+				expectedVal := `{"host":"1.1.1.1","ttl":60}`
 
-		if entries[0].Key == "/rootkey/local/kubemaster/x1" &&
-			entries[0].Val == `{"host":"1.1.1.1","ttl":10}` {
-			return true
-		}
+				if entries[0].Key != expectedKey || entries[0].Val != expectedVal {
+					t.Errorf("Expected key: %s and value %s but go key %s and value %s",
+						expectedKey, expectedVal, entries[0].Key, entries[0].Val)
+				}
 
-		t.Error("wrong key: " + fmt.Sprint(entries))
-		return false
+				if leaseTimeInSec != 30 {
+					t.Errorf("Expected lease time expected %d vs outcome %d", 30, leaseTimeInSec)
+				}
+
+				cancel() //Stop further processing the controller
+				return true
+
+			},
+			leaseRevokeRunFunc: func() bool {
+				return true //Defaults to return ok everytime
+			},
+		},
 	}
 
-	ctx, cancel := context.WithCancel(context.TODO())
+	go RunController(ctx, tc.rootKey, tc.DNSname, tc.DNSTTL, tc.leaser, tc.informer)
 
-	go RunController(ctx, "rootkey", dnsName, 10, &leaseTest, &infTest)
-
-	tchan := time.After(2 * time.Second)
-	<-tchan
+	time.Sleep(2 * time.Second)
 	cancel()
-
 }
 
-//Test 2: Verify that is lease is stopped, it will continue to read the informer
-func TestController2(t *testing.T) {
+// Verify that if lease is stopped, it will read the informer ip address again
+func TestControllerLeaseStopOK(t *testing.T) {
 
-	verifyTest := false
+	ctx, cancel := context.WithCancel(context.Background())
 
-	dnsName := "kubemaster.local"
+	//Verify the translated key is correct
+	tc := testCondCtrl{
+		rootKey: "rootkey",
+		DNSname: "kubemaster.local",
+		DNSTTL:  10,
+		informer: &infTest{
+			fakehostip: []string{"2.2.1.11"},
+			fakeChan:   make(chan struct{}),
+			getDNSTestFunc: func() bool {
+				return true
+			},
+		},
+		leaser: &leaseTest{
+			fakeChan: make(chan struct{}),
+			startLeaseFunc: func(entries []Entry, leaseTimeInSec int) bool {
+				expectedKey := "/rootkey/local/kubemaster/x1"
+				expectedVal := `{"host":"2.2.1.11","ttl":10}`
 
-	ctx, cancel := context.WithCancel(context.TODO())
+				if entries[0].Key != expectedKey || entries[0].Val != expectedVal {
+					t.Errorf("Expected key: %s and value %s but go key %s and value %s",
+						expectedKey, expectedVal, entries[0].Key, entries[0].Val)
+				}
 
-	infTest.getDNSTestFunc = func() bool {
-		verifyTest = true
+				return true
+
+			},
+			leaseRevokeRunFunc: func() bool {
+				return true //Defaults to return ok everytime
+			},
+		},
+	}
+
+	//If the func runs a second time, it should then check the verify gate
+	tc.informer.getDNSTestFunc = func() bool {
+
+		if tc.informer.readCount > 1 {
+
+			tc.verifyGate = true
+			cancel()
+		}
 		return true
 	}
 
-	go RunController(ctx, "rootkey", dnsName, 10, &leaseTest, &infTest)
-
-	//Trigger that leasing is somehow stopped
-	leaseTest.fakeChan <- struct{}{}
-
-	select {
-	case <-time.After(1 * time.Second):
-		if !verifyTest {
-			t.Error("Should terminate and get to read DNS record")
-		}
-	}
+	go RunController(ctx, tc.rootKey, tc.DNSname, tc.DNSTTL, tc.leaser, tc.informer)
 
 	tchan := time.After(2 * time.Second)
 	<-tchan
-	cancel()
 
+	tc.leaser.fakeChan <- struct{}{}
+
+	select {
+	case <-time.After(5 * time.Second):
+		if !tc.verifyGate {
+			t.Error("It is not reading the hostsips")
+		}
+	}
+
+	cancel()
 }
 
-//Test 3: Verify that is node informer has changed, it will revoke the lease
-func TestController3(t *testing.T) {
+// Verify informer has changed, it will revoke the lease
+func TestControllerinformerChangeOk(t *testing.T) {
 
-	verifyTest := false
+	ctx, cancel := context.WithCancel(context.Background())
 
-	dnsName := "kubemaster.local"
+	//Verify the translated key is correct
+	tc := testCondCtrl{
+		rootKey: "rootkey",
+		DNSname: "kubemaster.local",
+		DNSTTL:  10,
+		informer: &infTest{
+			fakehostip: []string{"2.2.1.11"},
+			fakeChan:   make(chan struct{}),
+			getDNSTestFunc: func() bool {
+				return true
+			},
+		},
+		leaser: &leaseTest{
+			fakeChan: make(chan struct{}),
+			startLeaseFunc: func(entries []Entry, leaseTimeInSec int) bool {
+				expectedKey := "/rootkey/local/kubemaster/x1"
+				expectedVal := `{"host":"2.2.1.11","ttl":10}`
 
-	ctx, cancel := context.WithCancel(context.TODO())
+				if entries[0].Key != expectedKey || entries[0].Val != expectedVal {
+					t.Errorf("Expected key: %s and value %s but go key %s and value %s",
+						expectedKey, expectedVal, entries[0].Key, entries[0].Val)
+				}
 
-	leaseTest.leaseRevokeRunFunc = func() bool {
-		verifyTest = true
+				return true
 
+			},
+			leaseRevokeRunFunc: func() bool {
+				return true //Defaults to return ok everytime
+			},
+		},
+	}
+
+	//If the func runs a second time, it should then check the verify gate
+	tc.leaser.leaseRevokeRunFunc = func() bool {
+
+		tc.verifyGate = true
 		cancel()
+
 		return true
 	}
 
-	go RunController(ctx, "rootkey", dnsName, 10, &leaseTest, &infTest)
-
-	//Wait for a second
-	time.Sleep(1 * time.Second)
-
-	//Trigger that informer has changed
-	infTest.fakeChan <- struct{}{}
-
-	select {
-	case <-time.After(1 * time.Second):
-		if !verifyTest {
-			t.Error("It should perform a lease revoke")
-		}
-	}
+	go RunController(ctx, tc.rootKey, tc.DNSname, tc.DNSTTL, tc.leaser, tc.informer)
 
 	tchan := time.After(2 * time.Second)
 	<-tchan
-	cancel()
 
+	tc.informer.fakeChan <- struct{}{}
+
+	select {
+	case <-time.After(5 * time.Second):
+		if !tc.verifyGate {
+			t.Error("It should revoke the lease")
+		}
+	}
+
+	cancel()
 }
 
-type InfTest struct {
+type infTest struct {
 	fakehostip     []string
 	err            error
 	fakeChan       chan struct{}
 	getDNSTestFunc func() bool
+	readCount      int
+}
+
+func (i *infTest) Start(ctx context.Context) {
+	//Not sure yet, what this should be doing
 }
 
 // GetDnsKeyVal - this is only for testing
-func (i *InfTest) GetHostIPs(ctx context.Context) (hostip []string, err error) {
+func (i *infTest) GetHostIPs(ctx context.Context) (hostip []string, err error) {
+
+	i.readCount++
 
 	if !i.getDNSTestFunc() {
 		return nil, i.err
@@ -139,20 +224,20 @@ func (i *InfTest) GetHostIPs(ctx context.Context) (hostip []string, err error) {
 }
 
 // GetDnsKeyVal - this is only for testing
-func (i *InfTest) GetInformerInterupt() (informerInterupted chan struct{}) {
+func (i *infTest) GetInformerInterupt() (informerInterupted chan struct{}) {
 	return i.fakeChan
 }
 
-type LeaseTest struct {
+type leaseTest struct {
 	err                error
 	fakeChan           chan struct{}
-	startLeaseFunc     func(entries []Entry) bool
+	startLeaseFunc     func(entries []Entry, leaseTimeInSec int) bool
 	leaseRevokeRunFunc func() bool
 }
 
-func (l *LeaseTest) StartLease(ctx context.Context, entries []Entry) error {
+func (l *leaseTest) StartLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
 
-	if l.startLeaseFunc(entries) {
+	if l.startLeaseFunc(entries, leaseTimeInSec) {
 		return nil
 	}
 
@@ -160,11 +245,11 @@ func (l *LeaseTest) StartLease(ctx context.Context, entries []Entry) error {
 
 }
 
-func (l *LeaseTest) GetRenewalInteruptChan() (renewalInterupted chan struct{}) {
+func (l *leaseTest) GetRenewalInteruptChan() (renewalInterupted chan struct{}) {
 	return l.fakeChan
 }
 
-func (l *LeaseTest) RevokeLease(ctx context.Context) error {
+func (l *leaseTest) RevokeLease(ctx context.Context) error {
 	if !l.leaseRevokeRunFunc() {
 		return l.err
 	}
