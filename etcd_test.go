@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/coreos/etcd/clientv3"
 )
 
 // func TestSum(t *testing.T) {
@@ -32,60 +34,65 @@ func SetupEtcdServer() *exec.Cmd {
 
 }
 
-func TestGrant(t *testing.T) {
+//Verify that ETCD lease is working
+func TestEtcdLease(t *testing.T) {
+
+	tc := struct {
+		entries  []Entry
+		expected []string
+	}{
+		entries: []Entry{
+			Entry{Key: "/key1", Val: "Val1"},
+			Entry{Key: "/key2", Val: "Val2"},
+		},
+		expected: []string{
+			"/key1" + ":" + "Val1",
+			"/key2" + ":" + "Val2",
+		},
+	}
 
 	cmd := SetupEtcdServer()
 
-	ctx := context.TODO()
+	ctx, cancel := context.WithCancel(context.Background())
 
-	kv, leaseID, lease, _ := NewGrant(ctx, "http://127.0.0.1:2378", 2, "thekey", "thevalue")
-
-	if leaseID < 1 {
-		t.Error("Wrong ID")
-	}
-
-	//fmt.Println(leaseID)
-	//ttlresp := lease.TimeToLive(ctx, leaseID)
-
-	err := RenewLeaseOnce(ctx, lease, leaseID)
-
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{"http://localhost:2378"},
+		DialTimeout: 2 * time.Second,
+	})
 	if err != nil {
-		t.Error("It should be possible to renew the lease")
+		t.Error(err.Error())
+		cmd.Process.Kill()
+		cancel()
+		return
 	}
 
-	resp, _ := kv.Get(ctx, "thekey")
-	val := string(resp.Kvs[0].Value)
+	etcd := NewEtcdLease(cli)
 
-	//fmt.Println(resp.Kvs[0])
-	if val != "thevalue" {
-		t.Error("Expecting 'thekey' but got " + val)
+	entries := tc.entries
+
+	etcd.StartLease(ctx, entries, 10)
+	etcd.RenewLease(ctx)
+
+	resp, err := cli.Get(ctx, "/Key")
+	if err != nil {
+		t.Error(err.Error())
+		cmd.Process.Kill()
+		cancel()
+		return
 	}
 
-	_, _, _, err = NewGrant(ctx, "http://127.0.0.1:3000", 2, "thekey", "thevalue")
-
-	if err == nil {
-		t.Error("It should error as it cannot connect to port 3000")
+	if len(resp.Kvs) < 1 {
+		t.Error("No result was found")
 	}
 
-	err2 := RenewLeaseOnce(ctx, lease, leaseID)
-
-	if err2 == nil {
-		t.Error("It should error out")
+	for i, kv := range resp.Kvs {
+		outcome := fmt.Sprintf("%s:", kv.Key) + fmt.Sprintf("%s:", kv.Value)
+		if tc.expected[i] != outcome {
+			t.Errorf("Expected: %d %s but outcome: %s", i, tc.expected[i], outcome)
+		}
 	}
 
-	err5 := cmd.Process.Kill()
-
-	if err5 != nil {
-		t.Error("Cannot kill the etcd server:" + err5.Error())
-	}
-
-	renewInteruptChan, _ := RenewLease(ctx, lease, leaseID, 2)
-
-	select {
-	case <-renewInteruptChan:
-		break
-	case <-time.After(5 * time.Second):
-		t.Error("It supposed to send interupt")
-	}
-
+	//Kill the etcd server
+	cmd.Process.Kill()
+	cancel()
 }

@@ -2,13 +2,19 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
 	"google.golang.org/grpc"
 )
+
+// Entry - Key Val entry for dns entry
+type Entry struct {
+	Key string
+	Val string
+}
 
 // EtcdLease - Managed all the etcd connection and renewal
 type EtcdLease struct {
@@ -16,56 +22,53 @@ type EtcdLease struct {
 	lease             clientv3.Lease
 	leaseID           clientv3.LeaseID
 	renewalInterupted chan struct{}
-	endpoint          string
-	leaseTimeInSec    int64
-	renewTickCheck    int64
-	kvKey             string
-	kvVal             string
-	// kvKey   string
-	// kvVal   string
 
+	client *clientv3.Client
+
+	//Deadline for the leasing, this when the channel would set to nil
+	leaseTimeInSec int
+
+	//This to check the channel is still healthy
+	renewTickCheck int
 }
 
-// NewEtcdLease - establish a new Lease for next op
-func NewEtcdLease(ctx context.Context, endpoint string, leaseTimeInSec int64, renewTickCheck int64,
-	kvKey string, kvVal string) *EtcdLease {
+// NewEtcdLease - Establish a new Lease for next op
+func NewEtcdLease(client *clientv3.Client) *EtcdLease {
+
+	//% etcdctl put /skydns/local/skydns/x1 '{"host":"1.1.1.1","ttl":60}'
+	//% etcdctl put /skydns/local/skydns/x2 '{"host":"1.1.1.2","ttl":60}'
 
 	return &EtcdLease{
-		endpoint:       endpoint,
-		leaseTimeInSec: leaseTimeInSec,
-		renewTickCheck: renewTickCheck,
+		client: client,
+		// leaseTimeInSec: leaseTimeInSec,
+		// renewTickCheck: renewTickCheck,
 	}
 }
 
 // StartLease - Start watching for lease for the key and value
-func (e *EtcdLease) StartLease(ctx context.Context, kvKey string, kvVal string) error {
+// Ideally leaseTimeInSec should be less than renewTickCheck
+func (e *EtcdLease) StartLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
 
-	//Create New Client
-	cl, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{e.endpoint},
-		DialTimeout: 2 * time.Second,
-	})
+	e.UpdateKeepAliveTime(leaseTimeInSec)
 
-	if err != nil {
-		fmt.Println("Fail to connect to etcd server " + err.Error())
-		return err
-	}
-
-	kv := clientv3.NewKV(cl)
-	lease := clientv3.NewLease(cl)
+	kv := clientv3.NewKV(e.client)
+	lease := clientv3.NewLease(e.client)
 
 	//Grant the lease with the time
-	leaseResp, err := lease.Grant(ctx, e.leaseTimeInSec)
+	leaseResp, err := lease.Grant(ctx, int64(e.leaseTimeInSec))
 	if err != nil {
 		fmt.Println("Could not setup the lease " + err.Error())
 		return err
 	}
 
-	//Attemp to write the key value into etcd with the lease
-	_, err = kv.Put(ctx, e.kvKey, e.kvVal, clientv3.WithLease(leaseResp.ID))
-	if err != nil {
-		fmt.Println("Could not write to store: " + err.Error())
-		return err
+	//Write a list of entries into etcd
+	for _, entry := range entries {
+		//Attemp to write the key value into etcd with the lease
+		_, err = kv.Put(ctx, entry.Key, entry.Val, clientv3.WithLease(leaseResp.ID))
+		if err != nil {
+			fmt.Println("Could not write to store: " + err.Error())
+			return err
+		}
 	}
 
 	e.leaseID = leaseResp.ID
@@ -79,6 +82,19 @@ func (e *EtcdLease) StartLease(ctx context.Context, kvKey string, kvVal string) 
 	return nil
 }
 
+// UpdateKeepAliveTime - It is not practical to used the same LeaseTime as DNS TTL Time
+func (e *EtcdLease) UpdateKeepAliveTime(leaseTimeInSec int) {
+
+	e.leaseTimeInSec = leaseTimeInSec
+
+	if leaseTimeInSec <= 3 {
+		e.leaseTimeInSec = 1
+	}
+
+	e.renewTickCheck = leaseTimeInSec / 2
+
+}
+
 // RenewLease - Keep on renewing the lease
 func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan struct{}, err error) {
 
@@ -88,6 +104,11 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 	if err != nil {
 		fmt.Println("Could not renew lease " + err.Error())
 		return
+	}
+
+	//Error before this become a panic
+	if e.renewTickCheck <= 0 {
+		return nil, errors.New("Can not use non value")
 	}
 
 	renewalTicker := time.NewTicker(time.Duration(e.renewTickCheck) * time.Second)
@@ -109,9 +130,9 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 				// 	fmt.Println(karesp.TTL)
 				// }
 			case <-renewalTicker.C:
-				fmt.Println("Channel is not closed + TODO time")
+				fmt.Println("Rechecking keep alive channel is closed")
 			case <-ctx.Done(): //If a parent context requested to be closed
-				fmt.Println("Closing RenewLease routine:" + strconv.FormatInt(int64(e.leaseID), 64))
+				fmt.Println("Closing RenewLease routine:" + fmt.Sprintf("%d", e.leaseID))
 				break loop
 			}
 
