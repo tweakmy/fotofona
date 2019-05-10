@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
-	"google.golang.org/grpc"
 )
 
 // Entry - Key Val entry for dns entry
@@ -45,34 +44,23 @@ func NewEtcdLease(client *clientv3.Client) *EtcdLease {
 	}
 }
 
+// LeaseStatus - Meant to use for troubleshooting
+func (e *EtcdLease) LeaseStatus() {
+	ttlresp, err := e.lease.TimeToLive(context.Background(), e.leaseID)
+	if err != nil {
+		fmt.Println(fmt.Errorf(err.Error()))
+		return
+	}
+	fmt.Println(ttlresp)
+}
+
 // StartLease - Start watching for lease for the key and value
-// Ideally leaseTimeInSec should be less than renewTickCheck
 func (e *EtcdLease) StartLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
 
-	e.UpdateKeepAliveTime(leaseTimeInSec)
-
-	kv := clientv3.NewKV(e.client)
-	lease := clientv3.NewLease(e.client)
-
-	//Grant the lease with the time
-	leaseResp, err := lease.Grant(ctx, int64(e.leaseTimeInSec))
+	err := e.InitLease(ctx, entries, leaseTimeInSec)
 	if err != nil {
-		fmt.Println("Could not setup the lease " + err.Error())
 		return err
 	}
-
-	//Write a list of entries into etcd
-	for _, entry := range entries {
-		//Attemp to write the key value into etcd with the lease
-		_, err = kv.Put(ctx, entry.Key, entry.Val, clientv3.WithLease(leaseResp.ID))
-		if err != nil {
-			fmt.Println("Could not write to store: " + err.Error())
-			return err
-		}
-	}
-
-	e.leaseID = leaseResp.ID
-	e.lease = lease
 
 	e.renewalInterupted, err = e.RenewLease(ctx)
 	if err != nil {
@@ -80,6 +68,37 @@ func (e *EtcdLease) StartLease(ctx context.Context, entries []Entry, leaseTimeIn
 	}
 
 	return nil
+}
+
+// InitLease - Initalize Lease
+// Ideally leaseTimeInSec should be less than renewTickCheck
+func (e *EtcdLease) InitLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
+	e.UpdateKeepAliveTime(leaseTimeInSec)
+
+	kv := clientv3.NewKV(e.client)
+	e.lease = clientv3.NewLease(e.client)
+
+	//Grant the lease with the time
+	leaseResp, err := e.lease.Grant(ctx, int64(e.leaseTimeInSec))
+	if err != nil {
+		fmt.Println("Could not setup the lease " + err.Error())
+		return err
+	}
+
+	e.leaseID = leaseResp.ID
+
+	//Write a list of entries into etcd
+	for _, entry := range entries {
+		//Attemp to write the key value into etcd with the lease
+		_, err = kv.Put(ctx, entry.Key, entry.Val, clientv3.WithLease(e.leaseID))
+		if err != nil {
+			fmt.Println("Could not write to store: " + err.Error())
+			return err
+		}
+	}
+
+	return nil
+
 }
 
 // UpdateKeepAliveTime - It is not practical to used the same LeaseTime as DNS TTL Time
@@ -123,7 +142,9 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 
 			select {
 			case _, ok := <-kaCh:
+				fmt.Println("Refreshing channel")
 				if !ok {
+					fmt.Println("Channel not ok")
 					break loop
 				}
 				// else {
@@ -133,12 +154,13 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 				fmt.Println("Rechecking keep alive channel is closed")
 			case <-ctx.Done(): //If a parent context requested to be closed
 				fmt.Println("Closing RenewLease routine:" + fmt.Sprintf("%d", e.leaseID))
-				break loop
+				return //Terminate the go routine
 			}
 
 		}
 
 		renewalTicker.Stop() //Stop timer
+		fmt.Println("Signaled Interuption")
 		renewalInterupted <- struct{}{}
 		return
 	}()
@@ -151,130 +173,9 @@ func (e *EtcdLease) GetRenewalInteruptChan() (renewalInterupted chan struct{}) {
 	return e.renewalInterupted
 }
 
-// // NewGrant - Prepare a new grant for the enviroment to use
-// func NewGrant(ctx context.Context, endpoint string, leaseTimeInSec int64,
-// 	kvKey string, kvVal string) (clientv3.KV, clientv3.LeaseID, clientv3.Lease, error) {
-
-// 	//Create New Client
-// 	cl, err := clientv3.New(clientv3.Config{
-// 		Endpoints:   []string{endpoint},
-// 		DialTimeout: 2 * time.Second,
-// 	})
-
-// 	if err != nil {
-// 		fmt.Println("Fail to connect to etcd server " + err.Error())
-// 		return nil, 0, nil, err
-// 	}
-
-// 	kv := clientv3.NewKV(cl)
-// 	lease := clientv3.NewLease(cl)
-
-// 	//Grant the lease with the time
-// 	leaseResp, err := lease.Grant(ctx, leaseTimeInSec)
-// 	if err != nil {
-// 		fmt.Println("Could not setup the lease " + err.Error())
-// 		return nil, 0, nil, err
-// 	}
-
-// 	//Attemp to write the key value into etcd with the lease
-// 	_, err = kv.Put(ctx, kvKey, kvVal, clientv3.WithLease(leaseResp.ID))
-// 	if err != nil {
-// 		fmt.Println("Could not write to store: " + err.Error())
-// 		return nil, 0, nil, err
-// 	}
-
-// 	return kv, leaseResp.ID, lease, nil
-
-// }
-
-// // RenewLeaseOnce - Renewing lease once
-// func RenewLeaseOnce(ctx context.Context, lease clientv3.Lease, leaseID clientv3.LeaseID) (err error) {
-
-// 	_, err = lease.KeepAliveOnce(ctx, leaseID)
-// 	if err != nil {
-// 		fmt.Println("Could not renew lease once " + err.Error())
-// 	}
-
-// 	return
-// }
-
-// // RenewLease - Keep on renewing the lease
-// func RenewLease(ctx context.Context, lease clientv3.Lease, leaseID clientv3.LeaseID,
-// 	timeinsec int64) (renewalInterupted chan struct{}, err error) {
-
-// 	kaCh, err := lease.KeepAlive(ctx, leaseID)
-
-// 	if err != nil {
-// 		fmt.Println("Could not renew lease " + err.Error())
-// 		return
-// 	}
-
-// 	renewalTicker := time.NewTicker(time.Duration(timeinsec) * time.Second)
-
-// 	renewalInterupted = make(chan struct{})
-
-// 	//Run a separate goroutine to check if the renewal is interupted, otherwise indicate to parent the renewal is interupted
-// 	go func() {
-
-// 	loop:
-// 		for kaCh != nil {
-
-// 			select {
-// 			case _, ok := <-kaCh:
-// 				if !ok {
-// 					break loop
-// 				}
-// 				// else {
-// 				// 	fmt.Println(karesp.TTL)
-// 				// }
-// 			case <-renewalTicker.C:
-// 				fmt.Println("Channel is not closed")
-// 			}
-
-// 		}
-
-// 		renewalTicker.Stop() //Stop timer
-// 		renewalInterupted <- struct{}{}
-// 		return
-// 	}()
-
-// 	return
-// }
-
-// Testing
-func FuncA() bool {
-	// expect dial time-out on ipv4 blackhole
-	cl, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{"http://127.0.0.1:2378"},
-		DialTimeout: 2 * time.Second,
-	})
-	defer cl.Close()
-
-	// etcd clientv3 >= v3.2.10, grpc/grpc-go >= v1.7.3
-	if err == context.DeadlineExceeded {
-		return false
-	}
-
-	// etcd clientv3 <= v3.2.9, grpc/grpc-go <= v1.2.1
-	if err == grpc.ErrClientConnTimeout {
-		return false
-	}
-
-	timeout := 2 * time.Second
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	_, err = cl.Put(ctx, "abc", "def")
-
-	defer cancel()
-
-	if err != nil {
-
-		return false
-	}
-
-	resp, err := cl.Get(ctx, "abc")
-	fmt.Println(resp.Kvs)
-
-	return true
+// RevokeLease -
+func (e *EtcdLease) RevokeLease(ctx context.Context) error {
+	_, err := e.client.Revoke(ctx, e.leaseID)
+	return err
 
 }
