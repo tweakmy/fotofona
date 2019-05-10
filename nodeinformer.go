@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -86,7 +87,7 @@ func (i *Informer) updateHostIPs() error {
 		}
 
 		i.hostsIPs = append(i.hostsIPs, nodeip)
-
+		sort.Strings(i.hostsIPs) //Make sure IP is in ascending mode
 	}
 
 	return nil
@@ -125,7 +126,7 @@ func (i *Informer) Start(ctx context.Context) {
 	}
 
 	i.rwLock.Lock() //Block the downstream from reading intially
-	fmt.Println("Lock write")
+	//fmt.Println("Lock write")
 
 	factory := informers.NewFilteredSharedInformerFactory(i.clientset, 0, "", func(o *metaV1.ListOptions) {
 		o.LabelSelector = "node-role.kubernetes.io/master="
@@ -167,7 +168,7 @@ func (i *Informer) Start(ctx context.Context) {
 
 	factory.Start(ctx.Done())
 
-	fmt.Println("before cache is synced", i.hostsIPs)
+	//fmt.Println("before cache is synced", i.hostsIPs)
 
 	if !cache.WaitForCacheSync(ctx.Done(), nodeInformer.HasSynced) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
@@ -181,7 +182,7 @@ func (i *Informer) Start(ctx context.Context) {
 		return
 	}
 	i.rwLock.Unlock() //Now the downstream can read the first listing
-	fmt.Println("Unlock write")
+	//fmt.Println("Unlock write")
 
 	fmt.Println("cache is synced", i.hostsIPs)
 

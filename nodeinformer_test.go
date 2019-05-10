@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"sort"
 	"testing"
 	"time"
 
@@ -97,7 +96,7 @@ forloop:
 		switch op.addOrdelOrUpdate {
 		case "NONE":
 			outcomeArry := inf.GetHostIPs()
-			sort.Strings(outcomeArry)
+			//sort.Strings(outcomeArry)
 			outcome := fmt.Sprint(outcomeArry)
 
 			expected := fmt.Sprint(TestCondition.want[i])
@@ -112,7 +111,7 @@ forloop:
 			fakeClient.CoreV1().Nodes().Create(op.whatNode)
 			<-sigChan //Then wait for the changes to be notified
 			outcomeArry := inf.GetHostIPs()
-			sort.Strings(outcomeArry)
+			//sort.Strings(outcomeArry)
 			outcome := fmt.Sprint(outcomeArry)
 
 			expected := fmt.Sprint(TestCondition.want[i])
@@ -125,11 +124,11 @@ forloop:
 			fakeClient.CoreV1().Nodes().Delete(node1.Name, nil)
 			<-sigChan //Then wait for the changes to be notified
 			outcomeArry := inf.GetHostIPs()
-			sort.Strings(outcomeArry)
+			//sort.Strings(outcomeArry)
 			outcome := fmt.Sprint(outcomeArry)
 
 			expectedArry := TestCondition.want[i]
-			sort.Strings(outcomeArry)
+			//sort.Strings(outcomeArry)
 			expected := fmt.Sprint(expectedArry)
 			if outcome != expected {
 				t.Errorf("test item %d hostips outcome %s vs expected %s", i, outcome, expected)
