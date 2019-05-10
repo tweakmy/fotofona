@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
 
 	"github.com/coreos/etcd/clientv3"
 )
@@ -26,9 +24,6 @@ type EtcdLease struct {
 
 	//Deadline for the leasing, this when the channel would set to nil
 	leaseTimeInSec int
-
-	//This to check the channel is still healthy
-	renewTickCheck int
 }
 
 // NewEtcdLease - Establish a new Lease for next op
@@ -73,7 +68,6 @@ func (e *EtcdLease) StartLease(ctx context.Context, entries []Entry, leaseTimeIn
 // InitLease - Initalize Lease
 // Ideally leaseTimeInSec should be less than renewTickCheck
 func (e *EtcdLease) InitLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
-	e.UpdateKeepAliveTime(leaseTimeInSec)
 
 	kv := clientv3.NewKV(e.client)
 	e.lease = clientv3.NewLease(e.client)
@@ -101,19 +95,6 @@ func (e *EtcdLease) InitLease(ctx context.Context, entries []Entry, leaseTimeInS
 
 }
 
-// UpdateKeepAliveTime - It is not practical to used the same LeaseTime as DNS TTL Time
-func (e *EtcdLease) UpdateKeepAliveTime(leaseTimeInSec int) {
-
-	e.leaseTimeInSec = leaseTimeInSec
-
-	if leaseTimeInSec <= 3 {
-		e.leaseTimeInSec = 1
-	}
-
-	e.renewTickCheck = leaseTimeInSec / 2
-
-}
-
 // RenewLease - Keep on renewing the lease
 func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan struct{}, err error) {
 
@@ -126,11 +107,11 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 	}
 
 	//Error before this become a panic
-	if e.renewTickCheck <= 0 {
-		return nil, errors.New("Can not use non value")
-	}
+	// if e.renewTickCheck <= 0 {
+	// 	return nil, errors.New("Can not use non value")
+	// }
 
-	renewalTicker := time.NewTicker(time.Duration(e.renewTickCheck) * time.Second)
+	//renewalTicker := time.NewTicker(time.Duration(e.renewTickCheck) * time.Second)
 
 	renewalInterupted = make(chan struct{})
 
@@ -138,7 +119,7 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 	go func() {
 
 	loop:
-		for kaCh != nil {
+		for {
 
 			select {
 			case _, ok := <-kaCh:
@@ -150,8 +131,8 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 				// else {
 				// 	fmt.Println(karesp.TTL)
 				// }
-			case <-renewalTicker.C:
-				fmt.Println("Rechecking keep alive channel is closed")
+			// case <-renewalTicker.C:
+			// 	fmt.Println("Rechecking keep alive channel is closed")
 			case <-ctx.Done(): //If a parent context requested to be closed
 				fmt.Println("Closing RenewLease routine:" + fmt.Sprintf("%d", e.leaseID))
 				return //Terminate the go routine
@@ -159,7 +140,7 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 
 		}
 
-		renewalTicker.Stop() //Stop timer
+		//renewalTicker.Stop() //Stop timer
 		fmt.Println("Signaled Interuption")
 		renewalInterupted <- struct{}{}
 		return

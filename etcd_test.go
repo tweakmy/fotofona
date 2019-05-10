@@ -202,7 +202,7 @@ func TestEtcdRenewLease(t *testing.T) {
 
 }
 
-func TestRevokeLease(t *testing.T) {
+func TestEtcdRevokeLease(t *testing.T) {
 
 	tc := struct {
 		inputCond struct {
