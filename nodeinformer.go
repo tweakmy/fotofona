@@ -43,13 +43,19 @@ type Informer struct {
 	//RW Lock in case, external issues a read
 	rwLock sync.RWMutex
 
-	// lister
+	//lister
 	lister v1.NodeLister
 
 	//workqueue
 	queue workqueue.RateLimitingInterface
 
 	indexer cache.Indexer
+
+	// Error counter
+	errorCount int
+
+	//Closing Down Channel due to comms error
+	errCloseChan chan struct{}
 }
 
 // NewInformer - Create a new Informer
@@ -58,6 +64,7 @@ func NewInformer() *Informer {
 		//Initialize the channel
 		updateHostIPsChan: make(chan struct{}),
 		queue:             workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		errCloseChan:      make(chan struct{}),
 	}
 }
 
@@ -67,6 +74,34 @@ func (i *Informer) GetHostIPs() (hostips []string) {
 	defer i.rwLock.Unlock()
 	i.rwLock.Lock()
 	return i.hostsIPs
+}
+
+// GetNodeAddress - Return the node
+func GetNodeAddress(node *v1Api.Node, matchAddressType string) (ipaddress string, ConditionReady bool, err error) {
+
+	for _, conditions := range node.Status.Conditions {
+
+		if string(conditions.Type) == "Ready" {
+			if string(conditions.Status) == "True" {
+				//fmt.Println(address.Address)
+				ConditionReady = true
+			} else {
+				ConditionReady = false
+			}
+		}
+
+	}
+
+	for _, address := range node.Status.Addresses {
+
+		if string(address.Type) == matchAddressType {
+
+			ipaddress = string(address.Address)
+			return
+		}
+	}
+
+	return "", false, fmt.Errorf("Cannot locate IP Address Type: %s", matchAddressType)
 }
 
 // updateHostIPS - update the IPs to local var
@@ -81,14 +116,19 @@ func (i *Informer) updateHostIPs() error {
 	i.hostsIPs = []string{}
 
 	for _, node := range nodes {
-		nodeip, err := GetNodeAddress(node, addressType)
+
+		nodeip, nodeisready, err := GetNodeAddress(node, addressType)
 		if err != nil {
 			panic(err)
 		}
 
-		i.hostsIPs = append(i.hostsIPs, nodeip)
-		sort.Strings(i.hostsIPs) //Make sure IP is in ascending mode
+		if nodeisready {
+			i.hostsIPs = append(i.hostsIPs, nodeip)
+		}
+
 	}
+
+	sort.Strings(i.hostsIPs) //Make sure IP is in ascending mode
 
 	return nil
 }
@@ -96,6 +136,11 @@ func (i *Informer) updateHostIPs() error {
 // GetInformerInterupt - Provide the downstream api a notify that there was a change
 func (i *Informer) GetInformerInterupt() chan struct{} {
 	return i.updateHostIPsChan
+}
+
+// GetInformerErrorClose - Provide upstream that the informer can no longer proceed
+func (i *Informer) GetInformerErrorClose() chan struct{} {
+	return i.errCloseChan
 }
 
 // SetupClient - Split the function between setting up the client and controller
@@ -120,6 +165,32 @@ func (i *Informer) SetupClient(useKubeConfig bool) {
 
 // Start - connect the kubernetes master
 func (i *Informer) Start(ctx context.Context) {
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	//Added error count
+	errorCountFunc := func(err error) {
+
+		if strings.Contains(err.Error(), "connect: connection refused") {
+			i.errorCount++
+			fmt.Println("Error count", i.errorCount)
+		}
+
+		if i.errorCount > 2 {
+			cancel()
+			i.errCloseChan <- struct{}{} //Trigger up chain, that comms issues
+			fmt.Println("Terminiating due to error")
+
+		}
+	}
+
+	fmt.Println(len(runtime.ErrorHandlers))
+
+	//Add additional Error Handling
+	//if len(runtime.ErrorHandlers) > 2 {
+	runtime.ErrorHandlers = runtime.ErrorHandlers[0:2]
+	runtime.ErrorHandlers = append(runtime.ErrorHandlers, errorCountFunc)
+	//}
 
 	if i.clientset == nil {
 		panic("Client is not properly setup")
@@ -239,12 +310,14 @@ func (i *Informer) processNextItem() bool {
 		hostsIPsStr := fmt.Sprintf("%q", i.hostsIPs)
 
 		node := obj.(*v1Api.Node)
-		nodeIP, err2 := GetNodeAddress(node, addressType)
+		nodeIP, nodeisready, err2 := GetNodeAddress(node, addressType)
 		if err != nil {
 			panic(err2)
 		}
 
-		if !strings.Contains(hostsIPsStr, nodeIP) {
+		existInHostsIPsList := strings.Contains(hostsIPsStr, nodeIP)
+
+		if (nodeisready && !existInHostsIPsList) || (!nodeisready && existInHostsIPsList) {
 
 			i.rwLock.Lock()
 			err := i.updateHostIPs()
@@ -256,57 +329,8 @@ func (i *Informer) processNextItem() bool {
 			fmt.Printf("%q\n", i.hostsIPs)
 			i.updateHostIPsChan <- struct{}{} //Notify downstream to start reacting
 		}
+
 	}
 
 	return true
 }
-
-// GetNodeAddress - Return the node
-func GetNodeAddress(node *v1Api.Node, matchAddressType string) (string, error) {
-
-	for _, address := range node.Status.Addresses {
-
-		if string(address.Type) == matchAddressType && node.Status.Phase == "Ready" {
-			//fmt.Println(address.Address)
-			return string(address.Address), nil
-		}
-	}
-
-	return "", fmt.Errorf("Cannot locate IP Address Type: %s", matchAddressType)
-}
-
-// // StartInformerDoNOTUSE - do not use
-// func (i *Informer) StartInformerDoNOTUSE(ctx context.Context, useKubeConfig bool) {
-
-// 	kubeconfig := filepath.Join(
-// 		os.Getenv("HOME"), ".kube", "config",
-// 	)
-
-// 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-
-// 	clientset, err := kubernetes.NewForConfig(config)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-
-// 	//Only interested in the master node
-// 	nodes, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{
-// 		LabelSelector: "node-role.kubernetes.io/master=",
-// 	})
-
-// 	if err != nil {
-// 		log.Fatalln("failed to get nodes:", err)
-// 	}
-
-// 	for i, node := range nodes.Items {
-// 		fmt.Printf("[%d] %s\n", i, node.GetName())
-// 		for _, address := range node.Status.Addresses {
-// 			if string(address.Type) == "InternalIP" {
-// 				fmt.Println(address.Address)
-// 			}
-// 		}
-// 	}
-// }
