@@ -9,10 +9,12 @@ import (
 // RunController - Run the loop to periodically write the loop
 func RunController(ctx context.Context, rootKey string, dnsname string, dnsTTL int, lease LeaseInf, inf InformerInf) {
 
+	retryCount := 0
+
 	//Dns name remain constant over long period of time
 	dnsArry := reverseArray(strings.Split(dnsname, "."))
 
-	inf.Start(ctx)
+	go inf.Start(ctx)
 
 loop:
 	for {
@@ -24,11 +26,9 @@ loop:
 
 		hostips, err := inf.GetHostIPs(ctx)
 		if err != nil {
+			retryCount++
 			goto retry
 		}
-
-		// etcdctl put /skydns/local/skydns/x1 '{"host":"1.1.1.1","ttl":60}' - on the first node
-		// etcdctl put /skydns/local/skydns/x2 '{"host":"1.1.1.2","ttl":60}' - on the second node
 
 		//Intialize an empty slices before writign the value
 		entries = make([]Entry, len(hostips))
@@ -49,23 +49,27 @@ loop:
 				//Do nothing
 
 			case <-inf.GetInformerInterupt():
-				fmt.Println("Controller detected a informer change")
+				fmt.Println("Controller detected an informer change")
 				err := lease.RevokeLease(ctx)
 				if err != nil {
-					//What is handling here... I am not sure yet
-					panic("Not properly implemented as yet")
+					retryCount++
 				}
 
 				fmt.Println("Controller revoking the lease")
-
+			case <-inf.GetInformerErrorClose():
+				fmt.Println("Closing Informer due to error")
+				break loop
 			case <-ctx.Done(): //Parent ask to quit
-				fmt.Println("Controller Cancelling all work")
+				fmt.Println("Cancelling Controller work")
 				break loop
 
 			}
 		}
 	retry:
-		//TODO: implement backoff retry
+
+		if retryCount == 3 {
+			break loop
+		}
 	}
 
 }
@@ -102,4 +106,5 @@ type InformerInf interface {
 	Start(ctx context.Context)
 	GetHostIPs(ctx context.Context) (hostip []string, err error)
 	GetInformerInterupt() (informerInterupted chan struct{})
+	GetInformerErrorClose() (errClose chan struct{})
 }
