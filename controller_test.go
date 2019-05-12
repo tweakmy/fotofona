@@ -203,6 +203,7 @@ type infTest struct {
 	fakehostip     []string
 	err            error
 	fakeChan       chan struct{}
+	fakeCloseChan  chan struct{}
 	getDNSTestFunc func() bool
 	readCount      int
 }
@@ -226,6 +227,11 @@ func (i *infTest) GetHostIPs(ctx context.Context) (hostip []string, err error) {
 // GetDnsKeyVal - this is only for testing
 func (i *infTest) GetInformerInterupt() (informerInterupted chan struct{}) {
 	return i.fakeChan
+}
+
+// GetDnsKeyVal - this is only for testing
+func (i *infTest) GetInformerErrorClose() (errClose chan struct{}) {
+	return i.fakeCloseChan
 }
 
 type leaseTest struct {
