@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os/exec"
 	"testing"
@@ -39,6 +40,11 @@ func SetupEtcdServer() *exec.Cmd {
 
 //Verify that ETCD lease is working
 func TestEtcdLease(t *testing.T) {
+
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	var logLevel string
+	flag.StringVar(&logLevel, "logLevel", "2", "test")
+	flag.Lookup("v").Value.Set(logLevel)
 
 	tc := struct {
 		inputCond struct {

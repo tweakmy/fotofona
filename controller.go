@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/golang/glog"
 )
 
 // RunController - Run the loop to periodically write the loop
@@ -22,7 +24,7 @@ loop:
 		var errLease error
 		var entries []Entry
 
-		fmt.Println("Controller Started")
+		glog.Info("Controller Started")
 
 		hostips, err := inf.GetHostIPs(ctx)
 		if err != nil {
@@ -45,22 +47,22 @@ loop:
 
 			select {
 			case <-lease.GetRenewalInteruptChan():
-				fmt.Println("Controller detected an interuption on the renewal")
+				glog.Info("Controller detected an interuption on the renewal")
 				//Do nothing
 
 			case <-inf.GetInformerInterupt():
-				fmt.Println("Controller detected an informer change")
+				glog.Info("Controller detected an informer change")
 				err := lease.RevokeLease(ctx)
 				if err != nil {
 					retryCount++
 				}
 
-				fmt.Println("Controller revoking the lease")
+				glog.Info("Controller revoking the lease")
 			case <-inf.GetInformerErrorClose():
-				fmt.Println("Closing Informer due to error")
+				glog.Info("Closing Informer due to error")
 				break loop
 			case <-ctx.Done(): //Parent ask to quit
-				fmt.Println("Cancelling Controller work")
+				glog.Info("Cancelling Controller work")
 				break loop
 
 			}

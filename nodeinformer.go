@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +15,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
+
+	"github.com/golang/glog"
 
 	v1Api "k8s.io/api/core/v1"
 
@@ -70,7 +71,7 @@ func NewInformer() *Informer {
 
 // GetHostIPs - List all the IPs
 func (i *Informer) GetHostIPs() (hostips []string) {
-	fmt.Println("Read host ips")
+	glog.Infoln("Read host ips")
 	defer i.rwLock.Unlock()
 	i.rwLock.Lock()
 	return i.hostsIPs
@@ -152,12 +153,12 @@ func (i *Informer) SetupClient(useKubeConfig bool) {
 
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		log.Fatal(err)
+		glog.FatalDepth(2, err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Fatal(err)
+		glog.FatalDepth(2, err)
 	}
 
 	i.clientset = clientset
@@ -173,18 +174,16 @@ func (i *Informer) Start(ctx context.Context) {
 
 		if strings.Contains(err.Error(), "connect: connection refused") {
 			i.errorCount++
-			fmt.Println("Error count", i.errorCount)
+			glog.Infof("Error count %d\n", i.errorCount)
 		}
 
 		if i.errorCount > 2 {
 			cancel()
 			i.errCloseChan <- struct{}{} //Trigger up chain, that comms issues
-			fmt.Println("Terminiating due to error")
+			glog.Errorf("Terminiating due to error")
 
 		}
 	}
-
-	fmt.Println(len(runtime.ErrorHandlers))
 
 	//Add additional Error Handling
 	//if len(runtime.ErrorHandlers) > 2 {
@@ -214,16 +213,16 @@ func (i *Informer) Start(ctx context.Context) {
 
 				key, err := cache.MetaNamespaceKeyFunc(obj)
 				if err == nil && nodeInformer.HasSynced() {
-					fmt.Println("Add", key)
+					glog.V(2).Infof("Node added %s", key)
 					i.queue.Add(key)
 				}
 			},
 			UpdateFunc: func(oldobj, newObj interface{}) {
 
 				key, err := cache.MetaNamespaceKeyFunc(newObj)
-				key2, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(oldobj)
+				//key2, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(oldobj)
 				if err == nil && nodeInformer.HasSynced() {
-					fmt.Println("Updated", key2, key)
+					glog.V(2).Infof("Node updated %s", key)
 					i.queue.Add(key)
 				}
 
@@ -231,7 +230,7 @@ func (i *Informer) Start(ctx context.Context) {
 			DeleteFunc: func(obj interface{}) {
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 				if err == nil && nodeInformer.HasSynced() {
-					fmt.Println("Deleted", key)
+					glog.V(2).Infof("Node deleted %s", key)
 					i.queue.Add(key)
 				}
 			},
@@ -255,7 +254,7 @@ func (i *Informer) Start(ctx context.Context) {
 	i.rwLock.Unlock() //Now the downstream can read the first listing
 	//fmt.Println("Unlock write")
 
-	fmt.Println("cache is synced", i.hostsIPs)
+	glog.Infof("cache is synced %s", i.hostsIPs)
 
 	threadiness := 1
 
@@ -264,7 +263,7 @@ func (i *Informer) Start(ctx context.Context) {
 	}
 
 	<-ctx.Done()
-	fmt.Println("Stop Informer")
+	glog.Infof("Stop Informer")
 
 }
 
@@ -274,7 +273,8 @@ func (i *Informer) runWorker() {
 }
 
 func (i *Informer) processNextItem() bool {
-	fmt.Println("Process next item")
+
+	glog.V(2).Infof("Process next item")
 
 	// Wait until there is a new item in the working queue
 	key, quit := i.queue.Get()
@@ -290,7 +290,7 @@ func (i *Informer) processNextItem() bool {
 	obj, exists, err := i.indexer.GetByKey(key.(string))
 
 	if err != nil {
-		fmt.Printf("Fetching object with key %s from store failed with %v", key, err)
+		glog.Infof("%s Fetching object with key %s from store failed with %v\n", time.Now().String(), key, err)
 	}
 
 	if !exists {
@@ -302,7 +302,9 @@ func (i *Informer) processNextItem() bool {
 			runtime.HandleError(fmt.Errorf("Lister could not be read"))
 			return false
 		}
-		fmt.Printf("%q\n", i.hostsIPs)
+
+		glog.V(2).Infof("Got hostips %q", i.hostsIPs)
+
 		i.updateHostIPsChan <- struct{}{} //Notify downstream to start reacting
 
 	} else {
@@ -326,7 +328,8 @@ func (i *Informer) processNextItem() bool {
 				runtime.HandleError(fmt.Errorf("Lister could not be read"))
 				return false
 			}
-			fmt.Printf("%q\n", i.hostsIPs)
+
+			glog.V(2).Infof("Got hostips %q", i.hostsIPs)
 			i.updateHostIPsChan <- struct{}{} //Notify downstream to start reacting
 		}
 

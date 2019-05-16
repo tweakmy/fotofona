@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"testing"
 	"time"
@@ -38,6 +39,11 @@ type tddInformerCond struct {
 }
 
 func TestInformerCrud(t *testing.T) {
+
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	var logLevel string
+	flag.StringVar(&logLevel, "logLevel", "2", "test")
+	flag.Lookup("v").Value.Set(logLevel)
 
 	node1 := newMasterNode("node1", "10.0.0.1", "True")
 	node2 := newMasterNode("node2", "10.0.0.3", "True")

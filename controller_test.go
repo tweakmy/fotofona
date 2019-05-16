@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -26,6 +28,11 @@ func runControllerFunc(tc testCondCtrl) context.CancelFunc {
 
 // Verify the Entries are correctly converted and the Leaser will get the correct value
 func TestControllerVerifyEntriesOk(t *testing.T) {
+
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	var logLevel string
+	flag.StringVar(&logLevel, "logLevel", "2", "test")
+	flag.Lookup("v").Value.Set(logLevel)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/golang/glog"
 )
 
 // Entry - Key Val entry for dns entry
@@ -43,7 +44,7 @@ func NewEtcdLease(client *clientv3.Client) *EtcdLease {
 func (e *EtcdLease) LeaseStatus() {
 	ttlresp, err := e.lease.TimeToLive(context.Background(), e.leaseID)
 	if err != nil {
-		fmt.Println(fmt.Errorf(err.Error()))
+		glog.ErrorDepth(2, err)
 		return
 	}
 	fmt.Println(ttlresp)
@@ -75,7 +76,7 @@ func (e *EtcdLease) InitLease(ctx context.Context, entries []Entry, leaseTimeInS
 	//Grant the lease with the time
 	leaseResp, err := e.lease.Grant(ctx, int64(e.leaseTimeInSec))
 	if err != nil {
-		fmt.Println("Could not setup the lease " + err.Error())
+		glog.Errorf("Could not setup the lease %s", err.Error())
 		return err
 	}
 
@@ -86,7 +87,7 @@ func (e *EtcdLease) InitLease(ctx context.Context, entries []Entry, leaseTimeInS
 		//Attemp to write the key value into etcd with the lease
 		_, err = kv.Put(ctx, entry.Key, entry.Val, clientv3.WithLease(e.leaseID))
 		if err != nil {
-			fmt.Println("Could not write to store: " + err.Error())
+			glog.Errorf("Could not write to store: %s", err.Error())
 			return err
 		}
 	}
@@ -102,7 +103,7 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 	kaCh, err := e.lease.KeepAlive(ctx, e.leaseID)
 
 	if err != nil {
-		fmt.Println("Could not renew lease " + err.Error())
+		glog.Errorf("Could not renew lease %s", err.Error())
 		return
 	}
 
@@ -123,25 +124,26 @@ func (e *EtcdLease) RenewLease(ctx context.Context) (renewalInterupted chan stru
 
 			select {
 			case _, ok := <-kaCh:
-				fmt.Println("Refreshing channel")
+
 				if !ok {
-					fmt.Println("Channel not ok")
+					glog.Info("Channel not ok")
 					break loop
 				}
+				glog.V(2).Info("Refreshing channel")
 				// else {
 				// 	fmt.Println(karesp.TTL)
 				// }
 			// case <-renewalTicker.C:
 			// 	fmt.Println("Rechecking keep alive channel is closed")
 			case <-ctx.Done(): //If a parent context requested to be closed
-				fmt.Println("Closing RenewLease routine:" + fmt.Sprintf("%d", e.leaseID))
+				glog.Infof("Closing RenewLease routine: %d", int64(e.leaseID))
 				return //Terminate the go routine
 			}
 
 		}
 
 		//renewalTicker.Stop() //Stop timer
-		fmt.Println("Signaled Interuption")
+		glog.Info("Signaled Interuption")
 		renewalInterupted <- struct{}{}
 		return
 	}()
