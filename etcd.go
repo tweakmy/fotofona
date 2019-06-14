@@ -82,11 +82,8 @@ func (e *EtcdLease) InitLease(ctx context.Context, entries []Entry, leaseTimeInS
 	//Write a list of entries into etcd
 	for _, entry := range entries {
 
-		//check if key is hireachy
-
 		//Attempt to write the key value into etcd with the lease
 		_, err := e.client.Put(ctx, entry.Key, entry.Val, clientv3.WithLease(e.leaseID))
-
 		if err != nil {
 			glog.Errorf("Could not write to store: %s", err.Error())
 			return err

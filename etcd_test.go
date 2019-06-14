@@ -303,9 +303,16 @@ func TestCoreDNS(t *testing.T) {
 
 	entries :=
 		[]Entry{
-			Entry{Key: "/skydns/local", Val: "{\"host\":\"1.1.1.1\",\"ttl\":60}"},
-			//Entry{Key: "/skydns/local/skydns/x2", Val: "{\"host\":\"1.1.1.2\",\"ttl\":60}"},
+			Entry{Key: "/skydns/local/skydns/x1", Val: "{\"host\":\"1.1.1.1\",\"ttl\":60}"},
+			Entry{Key: "/skydns/local/skydns/x2", Val: "{\"host\":\"1.1.1.2\",\"ttl\":60}"},
 		}
+
+	expectedOutcome := `1.1.1.2
+1.1.1.1
+`
+	expectedOutcome2 := `1.1.1.1
+1.1.1.2
+`
 
 	//Start the CoreDNS
 	cmd := startDNS()
@@ -328,15 +335,27 @@ func TestCoreDNS(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cli.Put(ctx, "/skydns", "/local")
-
 	etcd := NewEtcdLease(cli)
-	err2 := etcd.InitLease(ctx, entries, 30)
+	err2 := etcd.InitLease(ctx, entries, 300)
 
 	if err2 != nil {
 		t.Error(err.Error())
 		return
 	}
 
-	time.Sleep(1000 * time.Second)
+	time.Sleep(5 * time.Second)
+
+	out, err := exec.Command("dig", "-p", "8053", "@127.0.0.1", "skydns.local", "+short").Output()
+
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	cmdlineOut := string(out)
+	if cmdlineOut != expectedOutcome && cmdlineOut != expectedOutcome2 {
+		fmt.Println(cmdlineOut)
+		t.Error("Wrong DNS ip resolved")
+	}
+
 }
