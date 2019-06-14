@@ -28,6 +28,9 @@ type clientops struct {
 //Specify what are the format of the TDD
 type tddInformerCond struct {
 
+	//WatchLabels
+	watchLabel string
+
 	//What was the initial node before informer was started
 	initialNodes []*v1.Node
 
@@ -49,6 +52,7 @@ func TestInformerCrud(t *testing.T) {
 	node2 := newMasterNode("node2", "10.0.0.3", "True")
 
 	var TestCondition = tddInformerCond{
+		watchLabel: "node-role.kubernetes.io/master=",
 		initialNodes: []*v1.Node{
 			node1,
 			node2},
@@ -80,10 +84,12 @@ func TestInformerCrud(t *testing.T) {
 
 	// Create the fake client.
 	fakeClient := fake.NewSimpleClientset(nodes...)
+
 	inf := Informer{
 		clientset:         fakeClient,
 		updateHostIPsChan: make(chan struct{}),
 		queue:             workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		watchLabels:       TestCondition.watchLabel,
 	}
 	sigChan := inf.GetInformerInterupt()
 
@@ -141,7 +147,7 @@ func TestInformerHandleCrash(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	inf := NewInformer()
+	inf := NewInformer("label=")
 
 	inf.SetupClient(false)
 

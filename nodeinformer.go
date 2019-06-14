@@ -57,15 +57,19 @@ type Informer struct {
 
 	//Closing Down Channel due to comms error
 	errCloseChan chan struct{}
+
+	//WatchLabels - comma separated label a=x,b=y
+	watchLabels string
 }
 
 // NewInformer - Create a new Informer
-func NewInformer() *Informer {
+func NewInformer(watchLabels string) *Informer {
 	return &Informer{
 		//Initialize the channel
 		updateHostIPsChan: make(chan struct{}),
 		queue:             workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		errCloseChan:      make(chan struct{}),
+		watchLabels:       watchLabels,
 	}
 }
 
@@ -199,7 +203,7 @@ func (i *Informer) Start(ctx context.Context) {
 	//fmt.Println("Lock write")
 
 	factory := informers.NewFilteredSharedInformerFactory(i.clientset, 0, "", func(o *metaV1.ListOptions) {
-		o.LabelSelector = "node-role.kubernetes.io/master="
+		o.LabelSelector = i.watchLabels
 	})
 
 	nodeInformer := factory.Core().V1().Nodes().Informer()
