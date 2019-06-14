@@ -24,7 +24,7 @@ type EtcdLease struct {
 	client *clientv3.Client
 
 	//Deadline for the leasing, this when the channel would set to nil
-	leaseTimeInSec int
+	//leaseTimeInSec int
 }
 
 // NewEtcdLease - Establish a new Lease for next op
@@ -35,8 +35,6 @@ func NewEtcdLease(client *clientv3.Client) *EtcdLease {
 
 	return &EtcdLease{
 		client: client,
-		// leaseTimeInSec: leaseTimeInSec,
-		// renewTickCheck: renewTickCheck,
 	}
 }
 
@@ -51,30 +49,29 @@ func (e *EtcdLease) LeaseStatus() {
 }
 
 // StartLease - Start watching for lease for the key and value
-func (e *EtcdLease) StartLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
+// func (e *EtcdLease) StartLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
 
-	err := e.InitLease(ctx, entries, leaseTimeInSec)
-	if err != nil {
-		return err
-	}
+// 	err := e.InitLease(ctx, entries, leaseTimeInSec)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	e.renewalInterupted, err = e.RenewLease(ctx)
-	if err != nil {
-		return err
-	}
+// 	e.renewalInterupted, err = e.RenewLease(ctx)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // InitLease - Initalize Lease
 // Ideally leaseTimeInSec should be less than renewTickCheck
 func (e *EtcdLease) InitLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
 
-	kv := clientv3.NewKV(e.client)
 	e.lease = clientv3.NewLease(e.client)
 
 	//Grant the lease with the time
-	leaseResp, err := e.lease.Grant(ctx, int64(e.leaseTimeInSec))
+	leaseResp, err := e.lease.Grant(ctx, int64(leaseTimeInSec))
 	if err != nil {
 		glog.Errorf("Could not setup the lease %s", err.Error())
 		return err
@@ -84,12 +81,17 @@ func (e *EtcdLease) InitLease(ctx context.Context, entries []Entry, leaseTimeInS
 
 	//Write a list of entries into etcd
 	for _, entry := range entries {
-		//Attemp to write the key value into etcd with the lease
-		_, err = kv.Put(ctx, entry.Key, entry.Val, clientv3.WithLease(e.leaseID))
+
+		//check if key is hireachy
+
+		//Attempt to write the key value into etcd with the lease
+		_, err := e.client.Put(ctx, entry.Key, entry.Val, clientv3.WithLease(e.leaseID))
+
 		if err != nil {
 			glog.Errorf("Could not write to store: %s", err.Error())
 			return err
 		}
+
 	}
 
 	return nil

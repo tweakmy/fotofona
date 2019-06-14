@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -21,18 +22,26 @@ import (
 
 func SetupEtcdServer() *exec.Cmd {
 
+	etcdStartDir := "./test-etcd"
+
 	cmd := exec.Command("etcd", "--listen-client-urls=http://localhost:2378",
 		"--advertise-client-urls=http://localhost:2378", "--listen-peer-urls=http://localhost:2382")
 
-	cmd.Dir = "./test-etcd" //Setup the data directory in ./test-etcd
+	cmd.Dir = etcdStartDir //Setup the data directory in ./test-etcd
 
-	error := cmd.Start()
+	//remove the data directory to avoid confusion
+	error := os.RemoveAll(etcdStartDir + "/default.etcd")
+	if error != nil {
+		fmt.Println(error)
+	}
+
+	error = cmd.Start()
 	if error != nil {
 		fmt.Println(error)
 	}
 
 	//Delay for sometime for the etcd server to start
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	return cmd
 
@@ -91,14 +100,14 @@ func TestEtcdLease(t *testing.T) {
 
 	etcd.InitLease(ctx, entries, tc.inputCond.leaseTime)
 
-	resp, err := cli.Get(ctx, "/key1", clientv3.WithRange("/key2"))
+	resp, err := cli.Get(ctx, "/key", clientv3.WithPrefix())
 	if err != nil {
 		t.Error(err.Error())
 		return
 	}
 
-	if len(resp.Kvs) < 1 {
-		t.Error("No result was found")
+	if len(resp.Kvs) != 2 {
+		t.Error("There should be 2 keys", resp.Kvs)
 	}
 
 	for i, kv := range resp.Kvs {
@@ -182,7 +191,7 @@ func TestEtcdRenewLease(t *testing.T) {
 	fmt.Println("Verify key is still being kept after the expiry time the lease is renewed")
 	time.Sleep(time.Duration(tc.inputCond.leaseTime+1) * time.Second)
 
-	resp, err := cli.Get(ctx, "/key1", clientv3.WithRange("/key2"))
+	resp, err := cli.Get(ctx, "/key", clientv3.WithPrefix())
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -274,4 +283,60 @@ func TestEtcdRevokeLease(t *testing.T) {
 		t.Error("Did not received the interupt")
 	}
 
+}
+
+func startDNS() *exec.Cmd {
+
+	cmd := exec.Command("coredns", "-dns.port=8053", "-conf=Corefile")
+	cmd.Dir = ".test-dns"
+
+	error := cmd.Start()
+	if error != nil {
+		fmt.Println(error)
+	}
+
+	return cmd
+}
+
+// Verify that the entries is what is expected by coredns every release
+func TestCoreDNS(t *testing.T) {
+
+	entries :=
+		[]Entry{
+			Entry{Key: "/skydns/local", Val: "{\"host\":\"1.1.1.1\",\"ttl\":60}"},
+			//Entry{Key: "/skydns/local/skydns/x2", Val: "{\"host\":\"1.1.1.2\",\"ttl\":60}"},
+		}
+
+	//Start the CoreDNS
+	cmd := startDNS()
+	defer cmd.Process.Kill()
+
+	//Start DNS Server
+	cmd2 := SetupEtcdServer()
+	defer cmd2.Process.Kill()
+
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{"http://localhost:2378"},
+		DialTimeout: 2 * time.Second,
+	})
+
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cli.Put(ctx, "/skydns", "/local")
+
+	etcd := NewEtcdLease(cli)
+	err2 := etcd.InitLease(ctx, entries, 30)
+
+	if err2 != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	time.Sleep(1000 * time.Second)
 }
