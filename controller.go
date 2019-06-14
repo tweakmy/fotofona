@@ -41,7 +41,7 @@ loop:
 		}
 
 		//Initally connect to etcd server and get the interupt channel
-		errLease = lease.StartLease(ctx, entries, calcLeaseTime(dnsTTL))
+		errLease = lease.InitLease(ctx, entries, calcLeaseTime(dnsTTL))
 
 		if errLease == nil {
 
@@ -98,7 +98,7 @@ func calcLeaseTime(dnsTTLTime int) int {
 
 // LeaseInf - Enable the controller to start leasing and wait for the signal to change flow
 type LeaseInf interface {
-	StartLease(ctx context.Context, entries []Entry, leaseTime int) error
+	InitLease(ctx context.Context, entries []Entry, leaseTime int) error
 	GetRenewalInteruptChan() (renewalInterupted chan struct{})
 	RevokeLease(ctx context.Context) error
 }

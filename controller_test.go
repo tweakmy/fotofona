@@ -248,7 +248,7 @@ type leaseTest struct {
 	leaseRevokeRunFunc func() bool
 }
 
-func (l *leaseTest) StartLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
+func (l *leaseTest) InitLease(ctx context.Context, entries []Entry, leaseTimeInSec int) error {
 
 	if l.startLeaseFunc(entries, leaseTimeInSec) {
 		return nil
