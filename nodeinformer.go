@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -13,7 +11,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/golang/glog"
@@ -63,22 +60,23 @@ type Informer struct {
 }
 
 // NewInformer - Create a new Informer
-func NewInformer(watchLabels string) *Informer {
+func NewInformer(watchLabels string, clientset kubernetes.Interface) *Informer {
 	return &Informer{
 		//Initialize the channel
 		updateHostIPsChan: make(chan struct{}),
 		queue:             workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		errCloseChan:      make(chan struct{}),
 		watchLabels:       watchLabels,
+		clientset:         clientset,
 	}
 }
 
 // GetHostIPs - List all the IPs
-func (i *Informer) GetHostIPs() (hostips []string) {
+func (i *Informer) GetHostIPs(ctx context.Context) (hostips []string, err error) {
 	glog.Infoln("Read host ips")
 	defer i.rwLock.Unlock()
 	i.rwLock.Lock()
-	return i.hostsIPs
+	return i.hostsIPs, nil
 }
 
 // GetNodeAddress - Return the node
@@ -146,26 +144,6 @@ func (i *Informer) GetInformerInterupt() chan struct{} {
 // GetInformerErrorClose - Provide upstream that the informer can no longer proceed
 func (i *Informer) GetInformerErrorClose() chan struct{} {
 	return i.errCloseChan
-}
-
-// SetupClient - Split the function between setting up the client and controller
-func (i *Informer) SetupClient(useKubeConfig bool) {
-
-	kubeconfig := filepath.Join(
-		os.Getenv("HOME"), ".kube", "config",
-	)
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		glog.FatalDepth(2, err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		glog.FatalDepth(2, err)
-	}
-
-	i.clientset = clientset
 }
 
 // Start - connect the kubernetes master

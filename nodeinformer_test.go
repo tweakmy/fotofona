@@ -4,13 +4,18 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/golang/glog"
 	v1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -127,7 +132,7 @@ forloop:
 
 		}
 
-		outcomeArry := inf.GetHostIPs()
+		outcomeArry, _ := inf.GetHostIPs(ctx)
 		//sort.Strings(outcomeArry)
 		outcome := fmt.Sprint(outcomeArry)
 
@@ -147,9 +152,9 @@ func TestInformerHandleCrash(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	inf := NewInformer("label=")
+	inf := NewInformer("label=", nil)
 
-	inf.SetupClient(false)
+	SetupClient(false, inf)
 
 	//Start the informer to read data
 	go inf.Start(ctx)
@@ -167,6 +172,26 @@ func TestInformerHandleCrash(t *testing.T) {
 		t.Error("Error handling did not happened correctly")
 	}
 
+}
+
+// SetupClient - Split the function between setting up the client and controller
+func SetupClient(useKubeConfig bool, i *Informer) {
+
+	kubeconfig := filepath.Join(
+		os.Getenv("HOME"), ".kube", "config",
+	)
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		glog.FatalDepth(2, err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		glog.FatalDepth(2, err)
+	}
+
+	i.clientset = clientset
 }
 
 // newMasterNode - helper function to create node
