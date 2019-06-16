@@ -1,0 +1,14 @@
+.:8053 {
+    etcd skydns.local {
+        stubzones
+        path /skydns
+        endpoint http://localhost:2378
+        upstream
+    }
+    prometheus
+    cache 160 skydns.local
+    loadbalance
+    bind 127.0.0.1
+    debug
+}
+
