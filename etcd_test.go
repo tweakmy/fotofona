@@ -51,9 +51,7 @@ func SetupEtcdServer() *exec.Cmd {
 func TestEtcdLease(t *testing.T) {
 
 	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-	var logLevel string
-	flag.StringVar(&logLevel, "logLevel", "2", "test")
-	flag.Lookup("v").Value.Set(logLevel)
+	flag.Set("v", "2")
 
 	tc := struct {
 		inputCond struct {
@@ -132,6 +130,9 @@ func TestEtcdLease(t *testing.T) {
 }
 
 func TestEtcdRenewLease(t *testing.T) {
+
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	flag.Set("v", "2")
 
 	tc := struct {
 		inputCond struct {
@@ -219,6 +220,9 @@ func TestEtcdRenewLease(t *testing.T) {
 
 func TestEtcdRevokeLease(t *testing.T) {
 
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	flag.Set("v", "2")
+
 	tc := struct {
 		inputCond struct {
 			leaseTime int
@@ -300,6 +304,12 @@ func startDNS() *exec.Cmd {
 
 // Verify that the entries is what is expected by coredns every release
 func TestCoreDNS(t *testing.T) {
+
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	flag.Set("v", "2")
+
+	//% etcdctl put /skydns/local/skydns/x1 '{"host":"1.1.1.1","ttl":60}'
+	//% etcdctl put /skydns/local/skydns/x2 '{"host":"1.1.1.2","ttl":60}'
 
 	entries :=
 		[]Entry{
