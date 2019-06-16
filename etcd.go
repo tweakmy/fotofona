@@ -30,9 +30,6 @@ type EtcdLease struct {
 // NewEtcdLease - Establish a new Lease for next op
 func NewEtcdLease(client *clientv3.Client) *EtcdLease {
 
-	//% etcdctl put /skydns/local/skydns/x1 '{"host":"1.1.1.1","ttl":60}'
-	//% etcdctl put /skydns/local/skydns/x2 '{"host":"1.1.1.2","ttl":60}'
-
 	return &EtcdLease{
 		client: client,
 	}
