@@ -1,5 +1,11 @@
 package main
 
+// flagEtcdRootPath - root path where coreDNS should find path
+var flagEtcdRootPath *string
+
+// flagKubeMasterDNSName - root path where coreDNS should find path
+var flagKubeMasterDNSName *string
+
 // flagKubeConfig - Path to the Kubeconfig
 var flagKubeConfig *string
 
@@ -21,13 +27,8 @@ var flagcert *string
 // flagcacert -
 var flagkey *string
 
-// flagEtcdRootPath - root path where coreDNS should find path
-var flagEtcdRootPath *string
-
-// flagKubeMasterDNSName - root path where coreDNS should find path
-var flagKubeMasterDNSName *string
-
 // Use for build version
 var buildtimestamp string
 
+// Use to indicate which fotofona version
 var githash string
