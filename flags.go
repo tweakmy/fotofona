@@ -4,7 +4,7 @@ package main
 var flagEtcdRootPath *string
 
 // flagKubeMasterDNSName - root path where coreDNS should find path
-var flagKubeMasterDNSName *string
+var flagKubeMasterDomainName *string
 
 // flagKubeConfig - Path to the Kubeconfig
 var flagKubeConfig *string
