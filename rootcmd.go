@@ -1,15 +1,19 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func init() {
 
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	flag.CommandLine.Parse([]string{})
 	// kubeconfig - default kubeconfig
 	var kubeconfig = filepath.Join(
 		os.Getenv("HOME"), ".kube", "config",
@@ -31,8 +35,8 @@ func init() {
 //RootCmd - Base command
 var RootCmd = &cobra.Command{
 	Use:   "fotofona",
-	Short: "Fotofona - Kubernetes Node DNS Server for client",
-	Long:  `???`,
+	Short: "Fotofona - Kubernetes Master DNS Server for Kube client",
+	Long:  `Use for locating the Kubernetes Master via DNS`,
 }
 
 // CmdExecute - Run Cobra Main here
