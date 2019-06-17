@@ -30,9 +30,7 @@ func runControllerFunc(tc testCondCtrl) context.CancelFunc {
 func TestControllerVerifyEntriesOk(t *testing.T) {
 
 	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-	var logLevel string
-	flag.StringVar(&logLevel, "logLevel", "2", "test")
-	flag.Lookup("v").Value.Set(logLevel)
+	flag.Set("v", "2")
 
 	ctx, cancel := context.WithCancel(context.Background())
 
