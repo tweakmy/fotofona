@@ -18,7 +18,7 @@ before_install:
   - tar xzvf etcd-v3.3.3-linux-amd64.tar.gz
   - sudo cp ./etcd-v3.3.3-linux-amd64/etcd /usr/bin/etcd
   - sudo apt-get update
-  - sudo apt-get -y install go-dep
+  - sudo apt-get install -y go-dep
 
 # Skip the install step. Don't `go get` dependencies. Only build with the code
 # in vendor/
