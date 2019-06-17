@@ -303,7 +303,7 @@ func startDNS() *exec.Cmd {
 }
 
 // Verify that the entries is what is expected by coredns every release
-func TestCoreDNS(t *testing.T) {
+func TestEtcdCoreDNS(t *testing.T) {
 
 	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
 	flag.Set("v", "2")
@@ -313,8 +313,8 @@ func TestCoreDNS(t *testing.T) {
 
 	entries :=
 		[]Entry{
-			Entry{Key: "/skydns/local/skydns/x1", Val: "{\"host\":\"1.1.1.1\",\"ttl\":60}"},
-			Entry{Key: "/skydns/local/skydns/x2", Val: "{\"host\":\"1.1.1.2\",\"ttl\":60}"},
+			Entry{Key: "/skydns/local/kubemaster/x1", Val: "{\"host\":\"1.1.1.1\",\"ttl\":60}"},
+			Entry{Key: "/skydns/local/kubemaster/x2", Val: "{\"host\":\"1.1.1.2\",\"ttl\":60}"},
 		}
 
 	expectedOutcome := `1.1.1.2
@@ -355,7 +355,7 @@ func TestCoreDNS(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	out, err := exec.Command("dig", "-p", "8053", "@127.0.0.1", "skydns.local", "+short").Output()
+	out, err := exec.Command("dig", "-p", "8053", "@127.0.0.1", "kubemaster.local", "+short").Output()
 
 	if err != nil {
 		t.Error(err.Error())
