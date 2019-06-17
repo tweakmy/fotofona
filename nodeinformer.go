@@ -154,7 +154,8 @@ func (i *Informer) Start(ctx context.Context) {
 	//Added error count
 	errorCountFunc := func(err error) {
 
-		if strings.Contains(err.Error(), "connect: connection refused") {
+		if strings.Contains(err.Error(), "connect: connection refused") || strings.Contains(err.Error(), "error") ||
+			strings.Contains(err.Error(), "Failed") {
 			i.errorCount++
 			glog.Infof("Error count %d\n", i.errorCount)
 		}
