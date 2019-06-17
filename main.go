@@ -2,10 +2,9 @@ package main
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -16,13 +15,17 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// func init() {
+// 	//Sets default for the glog for now
+
+// }
+
 func main() {
 
 	RootCmd.Run = func(cmd *cobra.Command, args []string) {
-
-		//Sets default for the glog for now
-		flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-		flag.Set("v", "2")
+		// goflag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+		// goflag.Set("v", "2")
+		//goflag.Parse()
 
 		//Validate all the user input
 		if *flagEtcdRootPath == "" {
@@ -30,7 +33,7 @@ func main() {
 			os.Exit(0)
 		}
 
-		if govalidator.IsDNSName(*flagKubeMasterDomainName) {
+		if !govalidator.IsDNSName(*flagKubeMasterDomainName) {
 			glog.Errorf("--domainname: should use qualified domain name")
 			os.Exit(0)
 		}
@@ -41,14 +44,15 @@ func main() {
 				glog.Errorf("--kubeconfigpath: kubeconfig path must exist")
 				os.Exit(0)
 			}
-
+			glog.Info("Using kubeconfig:" + kubeconfig)
 		} else {
-			kubeconfig = "" //Forces it use service account
+			kubeconfig = ""
+			glog.Info("Using service account")
 		}
 
 		//Wait for process kill signal
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, os.Kill)
+		c := make(chan os.Signal, 2)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -80,7 +84,7 @@ func main() {
 		}
 
 		lease := NewEtcdLease(cli)
-		RunController(ctx, *flagEtcdRootPath, *flagKubeMasterDomainName, 10, lease, inf)
+		go RunController(ctx, *flagEtcdRootPath, *flagKubeMasterDomainName, 60, lease, inf)
 		// Block until a signal is received.
 		<-c
 
