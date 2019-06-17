@@ -1,5 +1,5 @@
 .:8053 {
-    etcd skydns.local {
+    etcd kubemaster.local {
         stubzones
         path /skydns
         endpoint http://localhost:2378
