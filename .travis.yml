@@ -17,7 +17,7 @@ before_install:
   - curl -L  https://github.com/coreos/etcd/releases/download/v3.3.3/etcd-v3.3.3-linux-amd64.tar.gz -o etcd-v3.3.3-linux-amd64.tar.gz
   - tar xzvf etcd-v3.3.3-linux-amd64.tar.gz
   - sudo cp ./etcd-v3.3.3-linux-amd64/etcd /usr/bin/etcd
-  - sudo curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sudo sh
+  - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 
 # Skip the install step. Don't `go get` dependencies. Only build with the code
 # in vendor/
