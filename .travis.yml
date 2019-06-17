@@ -16,7 +16,9 @@ git:
 before_install:
   - curl -L  https://github.com/coreos/etcd/releases/download/v3.3.3/etcd-v3.3.3-linux-amd64.tar.gz -o etcd-v3.3.3-linux-amd64.tar.gz
   - tar xzvf etcd-v3.3.3-linux-amd64.tar.gz
-  - ./etcd-v3.3.3-linux-amd64/etcd &
+  - cp ./etcd-v3.3.3-linux-amd64/etcd /usr/bin/etcd
+  - sudo apt-get update
+  - sudo apt-get -y install go-dep
 
 # Skip the install step. Don't `go get` dependencies. Only build with the code
 # in vendor/
