@@ -1,19 +1,15 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"path/filepath"
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 func init() {
 
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-	flag.CommandLine.Parse([]string{})
 	// kubeconfig - default kubeconfig
 	var kubeconfig = filepath.Join(
 		os.Getenv("HOME"), ".kube", "config",
