@@ -1,7 +1,10 @@
 vendor
-Gopkg.lock
 # ignore files in folder foo
 test-etcd/*
+developement
+bin
+cmd
+.vscode
 
 # but keep the folder
 !test-etcd/.keep
