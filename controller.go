@@ -44,6 +44,7 @@ loop:
 		errLease = lease.InitLease(ctx, entries, calcLeaseTime(dnsTTL))
 
 		if errLease == nil {
+			retryCount = 0
 
 			select {
 			case <-lease.GetRenewalInteruptChan():
@@ -66,6 +67,9 @@ loop:
 				break loop
 
 			}
+		} else {
+			glog.Error(errLease)
+			retryCount++
 		}
 	retry:
 
