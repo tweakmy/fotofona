@@ -18,8 +18,8 @@ before_install:
   - tar xzvf etcd-v3.3.3-linux-amd64.tar.gz
   - sudo cp ./etcd-v3.3.3-linux-amd64/etcd /usr/bin/etcd
   - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-  - curl -L https://github.com/coredns/coredns/releases/download/v1.5.0/coredns_1.5.0_linux_arm64.tgz -o coredns_1.5.0_linux_arm64.tgz
-  - tar xzvf coredns_1.5.0_linux_arm64.tgz
+  - curl -L https://github.com/coredns/coredns/releases/download/v1.5.0/coredns_1.5.0_linux_amd64.tgz -o coredns_1.5.0_linux_amd64.tgz
+  - tar xzvf coredns_1.5.0_linux_amd64.tgz
   - sudo cp coredns /usr/bin/coredns
 
 # Skip the install step. Don't `go get` dependencies. Only build with the code
