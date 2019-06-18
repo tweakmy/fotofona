@@ -6,7 +6,7 @@ setproj:
 	export GOPATH=/opt/goproj:/opt/goproj/github.com/tweakmy/fotofona
 .PHONY: build
 build:
-	go build -ldflags "-X github.com/tweakmy/fotofona/main.buildtimestamp=`date -u '+%Y-%m-%d_%I:%M:%S%p'` -X github.com/tweakmy/fotofona/main.githash=`git rev-parse HEAD`" -o ./bin/fotofona
+	go build -ldflags "-X main.buildtimestamp=`date -u '+%Y-%m-%d_%I:%M:%S%p'` -X fotofona/main.githash=`git rev-parse HEAD`" -o ./bin/fotofona
 .PHONY: etcd
 etcd:
 	etcd --listen-client-urls=http://localhost:2378 --advertise-client-urls=http://localhost:2378 --listen-peer-urls=http://localhost:2382 --data-dir=test-etcd 
