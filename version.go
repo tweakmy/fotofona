@@ -6,6 +6,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Use for build version
+var buildtimestamp string
+
+// Use to indicate which fotofona version
+var githash string
+
 func init() {
 	RootCmd.AddCommand(versionCmd)
 }

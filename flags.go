@@ -26,9 +26,3 @@ var flagcert *string
 
 // flagcacert -
 var flagkey *string
-
-// Use for build version
-var buildtimestamp string
-
-// Use to indicate which fotofona version
-var githash string
