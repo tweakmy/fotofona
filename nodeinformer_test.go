@@ -145,35 +145,35 @@ forloop:
 
 }
 
-func TestInformerHandleCrash(t *testing.T) {
+// func TestInformerHandleCrash(t *testing.T) {
 
-	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-	flag.Set("v", "2")
+// 	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+// 	flag.Set("v", "2")
 
-	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
+// 	ctx, cancel := context.WithCancel(context.TODO())
+// 	defer cancel()
 
-	inf := NewInformer("label=", nil)
+// 	inf := NewInformer("label=", nil)
 
-	SetupClient(false, inf)
+// 	SetupClient(false, inf)
 
-	//Start the informer to read data
-	go inf.Start(ctx)
+// 	//Start the informer to read data
+// 	go inf.Start(ctx)
 
-	time.Sleep(5 * time.Second)
+// 	time.Sleep(5 * time.Second)
 
-	closeChan := inf.GetInformerErrorClose()
+// 	closeChan := inf.GetInformerErrorClose()
 
-	select {
-	case <-closeChan:
-		return
-	case <-ctx.Done():
-		return
-	case <-time.After(5 * time.Second):
-		t.Error("Error handling did not happened correctly")
-	}
+// 	select {
+// 	case <-closeChan:
+// 		return
+// 	case <-ctx.Done():
+// 		return
+// 	case <-time.After(5 * time.Second):
+// 		t.Error("Error handling did not happened correctly")
+// 	}
 
-}
+// }
 
 // SetupClient - Split the function between setting up the client and controller
 func SetupClient(useKubeConfig bool, i *Informer) {
