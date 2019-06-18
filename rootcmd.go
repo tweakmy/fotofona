@@ -41,7 +41,7 @@ func init() {
 var RootCmd = &cobra.Command{
 	Use:   "fotofona",
 	Short: "Fotofona - Kubernetes Master DNS Server for Kube client",
-	Long:  `Use for locating the Kubernetes Master via DNS`,
+	Long:  `Exposed Kubernetes Master(s) via DNS`,
 }
 
 // CmdExecute - Run Cobra Main here

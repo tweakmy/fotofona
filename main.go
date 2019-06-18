@@ -24,11 +24,6 @@ func main() {
 
 	RootCmd.Run = func(cmd *cobra.Command, args []string) {
 
-		//flag.Parse()
-		// goflag.Set("alsologtostderr", fmt.Sprintf("%t", true))
-		// goflag.Set("v", "2")
-		//goflag.Parse()
-
 		//Validate all the user input
 		if *flagEtcdRootPath == "" {
 			glog.Errorf("--rootpath: must not be empty")
