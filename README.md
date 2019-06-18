@@ -2,7 +2,7 @@
 DNS round robin for kube master
 
 ```./bin/fotofona -h
-Use for locating the Kubernetes Master via DNS
+Exposing Kubernetes Master(s) via DNS
 
 Usage:
   fotofona [flags]
