@@ -1,3 +1,7 @@
+NAME   := fotofona
+TAG    := $$(git rev-parse --short HEAD)
+IMG    := ${NAME}:${TAG}
+LATEST := ${NAME}:latest
 .PHONY: test
 test:
 	go test -v
@@ -13,3 +17,7 @@ etcd:
 .PHONY: dns
 dns:
 	coredns -dns.port=8053 -conf=.test-dns/Corefile
+.PHONY: docker
+docker:
+	docker build -t ${IMG} .
+	docker tag ${IMG} ${LATEST}
