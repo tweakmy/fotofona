@@ -1,11 +1,14 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func init() {
@@ -25,6 +28,12 @@ func init() {
 	flagcacert = RootCmd.PersistentFlags().StringP("cacerts", "", "", "verify certificates of TLS-enabled secure servers using this CA bundle for etcd")
 	flagcert = RootCmd.PersistentFlags().StringP("cert", "", "", "identify secure client using this TLS certificate file for etcd")
 	flagkey = RootCmd.PersistentFlags().StringP("key", "", "", "identify secure client using this TLS key file for etcd")
+
+	//Add the glog flag
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	flag.Set("v", "2")
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	flag.CommandLine.Parse([]string{})
 
 }
 

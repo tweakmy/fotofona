@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,7 +11,6 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -26,8 +24,7 @@ func main() {
 
 	RootCmd.Run = func(cmd *cobra.Command, args []string) {
 
-		pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-		flag.CommandLine.Parse([]string{})
+		//flag.Parse()
 		// goflag.Set("alsologtostderr", fmt.Sprintf("%t", true))
 		// goflag.Set("v", "2")
 		//goflag.Parse()
