@@ -225,6 +225,7 @@ func (i *Informer) Start(ctx context.Context) {
 
 	if !cache.WaitForCacheSync(ctx.Done(), nodeInformer.HasSynced) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
+		i.errCloseChan <- struct{}{}
 		return
 	}
 
